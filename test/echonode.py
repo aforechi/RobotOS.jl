@@ -1,11 +1,11 @@
 #A simple ROS node in python that listens for and responds to communication
 #from the Julia node
 
-import rospy
+import rospy2 as rospy
 from geometry_msgs.msg import PoseStamped, Vector3
 
-from std_srvs.srv import SetBool, SetBoolRequest, SetBoolResponse
-from nav_msgs.srv import GetPlan, GetPlanRequest, GetPlanResponse
+from std_srvs.srv import SetBool
+from nav_msgs.srv import GetPlan
 
 class Echo(object):
     def __init__(self):
@@ -29,14 +29,16 @@ class Echo(object):
         self._nrecv += 1
         rospy.set_param("/num_received_messages", self._nrecv)
 
-    def srv_cb(self, req):
+    def srv_cb(self, req, resp):
         if req.data:
-            self._calltimer = rospy.Timer(rospy.Duration(2.0), self.callsrv, oneshot=True)
+            self._calltimer = rospy.Timer(rospy.Duration(2.0), self.callsrv)
         rospy.set_param("/received_service_call", True)
-        return SetBoolResponse(True, "")
+        resp.success = True
+        resp.message = "success"
+        return resp
 
     def callsrv(self, ev):
-        req = GetPlanRequest()
+        req = GetPlan.Request()
         req.start.pose.position.x = 1.0
         req.goal.pose.position.y = 1.0
 

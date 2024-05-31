@@ -29,7 +29,7 @@ function __init__()
     copy!(_py_ros_callbacks, pyimport("ros_callbacks"))
 
     try
-        copy!(__rospy__, pyimport("rospy"))
+        copy!(__rospy__, pyimport("rospy2"))
     catch ex
         if (isa(ex, PyCall.PyError) && ex.T.__name__ == "ModuleNotFoundError")
             @error """

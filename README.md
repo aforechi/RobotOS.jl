@@ -10,3 +10,5 @@ Documentation links:
 [![](https://img.shields.io/badge/docs-stable-blue.svg)](https://jdlangs.github.io/RobotOS.jl/stable)
 
 [![](https://img.shields.io/badge/docs-latest-blue.svg)](https://jdlangs.github.io/RobotOS.jl/latest)
+
+Add support to ROS2 via https://github.com/aforechi/rospy2

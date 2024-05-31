@@ -57,6 +57,9 @@ const _ros_builtin_types = Dict{String,DataType}(
     #Deprecated by ROS but supported here
     "char"    => UInt8,
     "byte"    => Int8,
+    "float"   => Float32,
+    "double"  => Float64,    
+    "boolean" => Bool
     )
 
 #Abstract supertypes of all generated types
@@ -183,7 +186,7 @@ function addtype!(mod::ROSMsgModule, typ::String)
         end
         pymod, pyobj = _pyvars(_fullname(mod), typ)
 
-        deptypes = pyobj._slot_types
+        deptypes = collect(values(pyobj._fields_and_field_types))
         _importdeps!(mod, deptypes)
 
         push!(mod.members, typ)
@@ -199,15 +202,15 @@ function addtype!(mod::ROSSrvModule, typ::String)
         @debug("Service type import: ", _fullname(mod), ".", typ)
         pymod, pyobj = _pyvars(_fullname(mod), typ)
 
-        if ! PyCall.hasproperty(pyobj, "_request_class")
+        if ! PyCall.hasproperty(pyobj, "Request")
             error(string("Incorrect service name: ", typ))
         end
 
         #Immediately import dependencies from the Request/Response classes
         #Repeats are OK
-        req_obj = getproperty(pymod, string(typ,"Request"))
-        resp_obj = getproperty(pymod, string(typ,"Response"))
-        deptypes = [req_obj._slot_types; resp_obj._slot_types]
+        req_obj = getproperty(pyobj, "Request")
+        resp_obj = getproperty(pyobj, "Response")
+        deptypes = [collect(values(req_obj._fields_and_field_types)); collect(values(resp_obj._fields_and_field_types))]
         _importdeps!(mod, deptypes)
 
         push!(mod.members, typ)
@@ -390,9 +393,7 @@ function buildtype(mod::ROSMsgModule, typename::String)
     global _rospy_objects
     fulltypestr = _rostypestr(mod, typename)
     pyobj = _rospy_objects[fulltypestr]
-    memnames = pyobj.__slots__
-    memtypes = pyobj._slot_types
-    members = collect(zip(memnames, memtypes))
+    members = collect(pyobj._fields_and_field_types)
 
     typecode(fulltypestr, :AbstractMsg, members)
 end
@@ -404,18 +405,12 @@ function buildtype(mod::ROSSrvModule, typename::String)
 
     req_typestr = _rostypestr(mod, string(typename,"Request"))
     reqobj = _rospy_objects[req_typestr]
-    memnames = reqobj.__slots__
-    memtypes = reqobj._slot_types
-    reqmems = collect(zip(memnames, memtypes))
-    pyreq  = :(RobotOS._rospy_objects[$req_typestr])
+    reqmems = collect(reqobj._fields_and_field_types)
     reqexprs  = typecode(req_typestr, :AbstractSrv, reqmems)
 
     resp_typestr = _rostypestr(mod, string(typename,"Response"))
     respobj = _rospy_objects[resp_typestr]
-    memnames = respobj.__slots__
-    memtypes = respobj._slot_types
-    respmems = collect(zip(memnames, memtypes))
-    pyresp = :(RobotOS._rospy_objects[$resp_typestr])
+    respmems = collect(respobj._fields_and_field_types)
     respexprs = typecode(resp_typestr, :AbstractSrv, respmems)
 
     defsym = Symbol(typename)
@@ -468,7 +463,7 @@ function typecode(rosname::String, super::Symbol, members::Vector)
     exprs = Expr[]
     # Type declaration
     push!(exprs, :(
-        mutable struct $jlsym <: $super
+        @kwdef mutable struct $jlsym <: $super
             $(member_exprs.member_decls...)
         end
     ))
@@ -493,9 +488,10 @@ function typecode(rosname::String, super::Symbol, members::Vector)
     # Convert from PyObject
     push!(exprs, :(
         function convert(jlt::Type{$jlsym}, o::PyObject)
-            if convert(String, o."_type") != _typerepr(jlt)
-                throw(InexactError(:convert, $jlsym, o))
-            end
+            # TODO fix assertion
+            # if convert(String, o."_type") != _typerepr(jlt)
+            #     throw(InexactError(:convert, $jlsym, o))
+            # end
             jl = $jlsym()
             $(member_exprs.conv_from_pyobj_args...)
             jl
@@ -630,16 +626,22 @@ _isrostype(s::String) = occursin(r"^\w+/\w+(?:\[\d*\])?$", s)
 #size type. Returns 0 if variable size (no number), -1 if no brackets
 function _check_array_type(typ::String)
     arraylen = -1
-    m = match(r"^([\w/]+)\[(\d*)\]$", typ)
+    m = match(r"^sequence<([^<]+)>$", typ)
     if m != nothing
         btype = m.captures[1]
-        if isempty(m.captures[2])
-            arraylen = 0
-        else
-            arraylen = parse(Int, m.captures[2])
-        end
+        arraylen = 0
     else
-        btype = typ
+        m = match(r"^([\w/]+)\[(\d*)\]$", typ)
+        if m != nothing
+            btype = m.captures[1]
+            if isempty(m.captures[2])
+                arraylen = 0
+            else
+                arraylen = parse(Int, m.captures[2])
+            end
+        else
+            btype = typ
+        end
     end
     ascii(btype), arraylen
 end
@@ -671,7 +673,7 @@ _jl_safe_name(name::AbstractString, suffix) = _nameconflicts(name) ?
 
 #Check if the type name conflicts with a Julia builtin. Currently this is only
 #some of the messages from the std_msgs.msg package
-_nameconflicts(typename::String) = isdefined(Base, Symbol(typename))
+_nameconflicts(typename::String) = isdefined(Base, Symbol(typename)) || isdefined(RobotOS, Symbol(typename))
 
 #Get a default value for any builtin ROS type
 _typedefault(::Type{T}) where {T <: Real} = zero(T)

@@ -31,20 +31,14 @@ function pose_cb(msg::PoseStamped, msgs::Vector{PoseStamped})
     mtime > 0 && println("Message received, time: ",mtime," nanoseconds")
     if msg.header.stamp.secs > 1.0
         push!(msgs, msg)
-        println("Got message #",msg.header.seq)
+        #println("Got message #",msg.header.seq)
     end
 end
-pose_cb(PoseStamped(), msgs) #warm up run
 
 const ros_sub = Subscriber("poses", PoseStamped, pose_cb, (msgs,), queue_size = 10)
 
-#First message doesn't go out for some reason
-publish(ros_pub, Vector3(1.1,2.2,3.3))
-rossleep(Duration(1.0))
-
 #Test messages
 publish_messages(ros_pub, refs, 20.0)
-rossleep(Duration(1.0))
 
 println("Received ",length(msgs)," / ",Nmsgs)
 

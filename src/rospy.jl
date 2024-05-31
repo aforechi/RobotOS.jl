@@ -86,7 +86,7 @@ end
 #Doesn't work for some reason
 #rospy_search_param(param_name::AbstractString) =
 #    __rospy__.rospy_search_param(ascii(param_name))
-get_param_names() = __rospy__.get_param_names()
+#TODO get_param_names() = __rospy__.get_param_names()
 
 #Logging API
 logdebug(msg, args...) = __rospy__.logdebug(msg, args...)
